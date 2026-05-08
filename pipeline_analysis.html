@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pipeline Stage Analysis</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f1117; color: #e2e8f0; padding: 28px; min-height: 100vh; }
+  h1 { font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: #64748b; margin-bottom: 24px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 22px; flex-wrap: wrap; }
+  .tab { padding: 9px 22px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; border: none; transition: all 0.18s; }
+  .tab.active { background: #3b82f6; color: white; }
+  .tab.inactive { background: #1e293b; color: #94a3b8; border: 1px solid #2d3748; }
+  .tab.inactive:hover { background: #273548; color: #e2e8f0; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px; }
+  .kpi { background: #1e293b; border-radius: 12px; padding: 16px 18px; border: 1px solid #2d3748; }
+  .kpi-label { font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+  .kpi-value { font-size: 28px; font-weight: 800; color: #fff; line-height: 1; }
+  .kpi-sub { font-size: 12px; color: #64748b; margin-top: 4px; }
+  .kpi-accent { color: #3b82f6; } .kpi-warn { color: #f59e0b; } .kpi-green { color: #10b981; }
+  .alert { background: #1a1035; border: 1px solid #4c1d9533; border-radius: 10px; padding: 14px 18px; margin-bottom: 18px; }
+  .alert-title { font-size: 12px; font-weight: 700; color: #a78bfa; margin-bottom: 8px; }
+  .alert-items { font-size: 12px; color: #c4b5fd; line-height: 2; }
+  .alert-items b { color: #ede9fe; }
+  .section-title { font-size: 14px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 12px; margin-top: 4px; }
+  .stage-card { background: #1e293b; border-radius: 12px; padding: 16px 18px; margin-bottom: 10px; border: 1px solid #2d3748; }
+  .stage-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+  .stage-name-wrap { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .stage-name { font-size: 14px; font-weight: 600; color: #e2e8f0; }
+  .badge { font-size: 10px; padding: 2px 9px; border-radius: 20px; font-weight: 700; white-space: nowrap; }
+
+
+
+  .metrics-row { display: flex; gap: 20px; flex-wrap: wrap; }
+  .metric { text-align: center; min-width: 60px; }
+  .metric-val { font-size: 22px; font-weight: 800; line-height: 1; }
+  .metric-lbl { font-size: 10px; color: #64748b; margin-top: 3px; }
+  .m-blue{color:#60a5fa} .m-gray{color:#94a3b8} .m-orange{color:#fbbf24} .m-green{color:#34d399} .m-purple{color:#a78bfa}
+  .progress-wrap { margin-top: 10px; }
+  .progress-labels { display: flex; justify-content: space-between; font-size: 11px; color: #64748b; margin-bottom: 5px; }
+  .progress-bg { background: #0f172a; border-radius: 6px; height: 7px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 6px; }
+  .still-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: #fbbf24; background: #f59e0b12; border: 1px solid #f59e0b30; border-radius: 6px; padding: 2px 8px; margin-left: 4px; }
+  .hidden { display: none; }
+  .compare-section { background: #1e293b; border-radius: 12px; padding: 20px; border: 1px solid #2d3748; margin-bottom: 16px; }
+  .compare-title { font-size: 13px; font-weight: 700; color: #e2e8f0; margin-bottom: 16px; }
+  .compare-row { display: grid; grid-template-columns: 200px 1fr 1fr; gap: 10px; align-items: center; margin-bottom: 10px; }
+  .compare-stage-name { font-size: 12px; color: #94a3b8; font-weight: 500; }
+  .bar-c { height: 24px; border-radius: 5px; display: flex; align-items: center; padding: 0 10px; font-size: 11px; font-weight: 700; color: white; min-width: 44px; }
+  .compare-header { font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; }
+  .legend { display: flex; gap: 18px; margin-bottom: 14px; font-size: 12px; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; margin-right: 5px; vertical-align: middle; }
+  .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+  .summary-card { background: #0f172a; border-radius: 10px; padding: 16px; border: 1px solid #1e293b; }
+  .summary-pip { font-size: 13px; font-weight: 700; margin-bottom: 10px; }
+  .summary-row { display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; border-bottom: 1px solid #1e293b33; color: #94a3b8; }
+  .summary-row:last-child { border-bottom: none; }
+  .summary-row b { color: #e2e8f0; }
+  .cancer-controls { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+  .pill { padding: 7px 18px; border-radius: 20px; cursor: pointer; font-size: 12px; font-weight: 700; border: none; transition: all 0.15s; }
+  .pill.active { background: #3b82f6; color: #fff; }
+  .pill.inactive { background: #1e293b; color: #64748b; border: 1px solid #2d3748; }
+  .pill.inactive:hover { background: #273548; color: #e2e8f0; }
+  .pip-toggle { display: flex; gap: 8px; margin-bottom: 16px; }
+  .pip-pill { padding: 6px 16px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; border: none; }
+  .pip-pill.active { background: #1d4ed8; color: #fff; }
+  .pip-pill.active.intl { background: #b45309; }
+  .pip-pill.inactive { background: #1e293b; color: #64748b; border: 1px solid #2d3748; }
+  .cancer-card { background: #1e293b; border-radius: 12px; padding: 20px; border: 1px solid #2d3748; margin-bottom: 14px; }
+  .still-mini { font-size: 10px; color: #fbbf24; background: #f59e0b10; border-radius: 4px; padding: 1px 6px; margin-left: 6px; }
+  .no-data { font-size: 12px; color: #334155; padding: 8px 0; }
+</style>
+</head>
+<body>
+
+<h1>📊 Pipeline Stage Analysis</h1>
+<div class="subtitle">CTMS & CTMS International — HubSpot Deal Data, May 8, 2026 &nbsp;|&nbsp; Full funnel = Create Date → Report Release Date</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="show('ctms')">CTMS</button>
+  <button class="tab inactive" onclick="show('intl')">CTMS International</button>
+  <button class="tab inactive" onclick="show('compare')">🔄 Comparison</button>
+  <button class="tab inactive" onclick="show('cancer')">🔬 Cancer Type</button>
+</div>
+
+<!-- CTMS -->
+<div id="panel-ctms">
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">Total Records</div><div class="kpi-value">8,111</div><div class="kpi-sub">Contacts entered pipeline</div></div>
+    <div class="kpi"><div class="kpi-label">Reports Released</div><div class="kpi-value kpi-green">2,059</div><div class="kpi-sub">Report release date present</div></div>
+    <div class="kpi"><div class="kpi-label">Avg. Full Funnel</div><div class="kpi-value kpi-warn">21.7 days</div><div class="kpi-sub">Create Date → Report | Median: 16.4d</div></div>
+  </div>
+  <div class="alert">
+    <div class="alert-title">⚠️ Current Bottlenecks — Records Stuck in Stage</div>
+    <div class="alert-items">
+      • <b>962 records</b> waiting in Consent Forms Signed — avg. <b>34.1 days</b> in stage<br>
+      • <b>657 records</b> stuck in MR Requested — avg. <b>43.9 days</b> waiting<br>
+      • <b>167 records</b> in MR Received — avg. <b>7.6 days</b>
+    </div>
+  </div>
+  <div class="section-title">Stage-Level Duration Analysis</div>
+
+  <div class="stage-card">
+    <div class="stage-header">
+      <div class="stage-name-wrap"><span class="stage-name">1. Consent Forms Signed</span><span class="still-badge">⏳ 962 waiting · avg 34.1d</span></div>
+      <div class="metrics-row"><div class="metric"><div class="metric-val m-blue">7.2</div><div class="metric-lbl">Avg days</div></div><div class="metric"><div class="metric-val m-gray">1.8</div><div class="metric-lbl">Median</div></div><div class="metric"><div class="metric-val m-gray">124.4</div><div class="metric-lbl">Max</div></div></div>
+    </div>
+    <div class="progress-wrap"><div class="progress-labels"><span>Completed: 7,134 / 8,111</span><span>88.0%</span></div><div class="progress-bg"><div class="progress-fill" style="width:88%;background:linear-gradient(90deg,#3b82f6,#60a5fa)"></div></div></div>
+  </div>
+
+  <div class="stage-card">
+    <div class="stage-header">
+      <div class="stage-name-wrap"><span class="stage-name">Consent Form Signed — Attempted Contact</span><span class="still-badge">⏳ 4 waiting · avg 45.7d</span></div>
+      <div class="metrics-row"><div class="metric"><div class="metric-val m-blue">4.0</div><div class="metric-lbl">Avg days</div></div><div class="metric"><div class="metric-val m-gray">4.0</div><div class="metric-lbl">Median</div></div><div class="metric"><div class="metric-val m-gray">8.0</div><div class="metric-lbl">Max</div></div></div>
+    </div>
+    <div class="progress-wrap"><div class="progress-labels"><span>Completed: 8 / 12</span><span>66.7%</span></div><div class="progress-bg"><div class="progress-fill" style="width:67%;background:linear-gradient(90deg,#06b6d4,#22d3ee)"></div></div></div>
+  </div>
+
+  <div class="stage-card">
+    <div class="stage-header">
+      <div class="stage-name-wrap"><span class="stage-name">2. Medical Record Requested</span><span class="still-badge">⏳ 657 waiting · avg 43.9d</span></div>
+      <div class="metrics-row"><div class="metric"><div class="metric-val m-orange">9.3</div><div class="metric-lbl">Avg days</div></div><div class="metric"><div class="metric-val m-gray">7.1</div><div class="metric-lbl">Median</div></div><div class="metric"><div class="metric-val m-gray">106.0</div><div class="metric-lbl">Max</div></div></div>
+    </div>
+    <div class="progress-wrap"><div class="progress-labels"><span>Completed: 4,364 / 5,052</span><span>86.4%</span></div><div class="progress-bg"><div class="progress-fill" style="width:86%;background:linear-gradient(90deg,#f59e0b,#fbbf24)"></div></div></div>
+  </div>
+
+  <div class="stage-card">
+    <div class="stage-header">
+      <div class="stage-name-wrap"><span class="stage-name">3B. Medical Record Received</span><span class="still-badge">⏳ 167 waiting · avg 7.6d</span></div>
+      <div class="metrics-row"><div class="metric"><div class="metric-val m-blue">8.7</div><div class="metric-lbl">Avg days</div></div><div class="metric"><div class="metric-val m-gray">3.5</div><div class="metric-lbl">Median</div></div><div class="metric"><div class="metric-val m-gray">69.1</div><div class="metric-lbl">Max</div></div></div>
+    </div>
+    <div class="progress-wrap"><div class="progress-labels"><span>Completed: 3,015 / 3,195</span><span>94.4%</span></div><div class="progress-bg"><div class="progress-fill" style="width:94%;background:linear-gradient(90deg,#10b981,#34d399)"></div></div></div>
+  </div>
+
+  <div class="stage-card">
+    <div class="stage-header">
+      <div class="stage-name-wrap"><span class="stage-name">4. Under Abstraction</span><span class="still-badge">⏳ 6 waiting · avg 11.3d</span></div>
+      <div class="metrics-row"><div class="metric"><div class="metric-val m-purple">0.2</div><div class="metric-lbl">Avg days</div></div><div class="metric"><div class="metric-val m-gray">0.0</div><div class="metric-lbl">Median</div></div><div class="metric"><div class="metric-val m-gray">29.9</div><div class="metric-lbl">Max</div></div></div>
+    </div>
+    <div class="progress-wrap"><div class="progress-labels"><span>Completed: 2,379 / 2,389</span><span>99.6%</span></div><div class="progress-bg"><div class="progress-fill" style="width:99.6%;background:linear-gradient(90deg,#8b5cf6,#a78bfa)"></div></div></div>
+  </div>
+
+  <div class="stage-card" style="border-color:#10b98133">
+    <div class="stage-header">
+      <div class="stage-name-wrap"><span class="stage-name">Report Release Date</span></div>
+      <div class="metrics-row"><div class="metric"><div class="metric-val m-green">21.7</div><div class="metric-lbl">Avg days</div></div><div class="metric"><div class="metric-val m-gray">16.4</div><div class="metric-lbl">Median</div></div><div class="metric"><div class="metric-val m-gray">2,059</div><div class="metric-lbl">Records</div></div></div>
+    </div>
+    <div class="progress-wrap"><div class="progress-labels"><span>Total time from Create Date to Report Release</span></div><div class="progress-bg"><div class="progress-fill" style="width:100%;background:linear-gradient(90deg,#10b981,#34d399)"></div></div></div>
+  </div>
+</div>
+
+<!-- CTMS INTERNATIONAL -->
+<div id="panel-intl" class="hidden">
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">Total Records</div><div class="kpi-value">2,933</div><div class="kpi-sub">Contacts entered pipeline</div></div>
+    <div class="kpi"><div class="kpi-label">Reports Released</div><div class="kpi-value kpi-green">526</div><div class="kpi-sub">Report release date present</div></div>
+    <div class="kpi"><div class="kpi-label">Avg. Full Funnel</div><div class="kpi-value kpi-green">16.5 days</div><div class="kpi-sub">Create Date → Report | Median: 13.5d</div></div>
+  </div>
+  <div class="alert">
+    <div class="alert-title">⚠️ Current Bottlenecks — Records Stuck in Stage</div>
+    <div class="alert-items">
+      • <b>123 records</b> waiting in Consent Forms Signed — avg. <b>63.4 days</b> in stage (critical!)<br>
+      • <b>46 records</b> stuck in MR Requested — avg. <b>18.1 days</b><br>
+      • <b>28 records</b> in Attempted Contact — avg. <b>7.0 days</b>
+    </div>
+  </div>
+  <div class="section-title">Stage-Level Duration Analysis</div>
+
+  <div class="stage-card">
+    <div class="stage-header">
+      <div class="stage-name-wrap"><span class="stage-name">1. Consent Forms Signed</span><span class="still-badge">⏳ 123 waiting · avg 63.4d</span></div>
+      <div class="metrics-row"><div class="metric"><div class="metric-val m-blue">0.9</div><div class="metric-lbl">Avg days</div></div><div class="metric"><div class="metric-val m-gray">0.3</div><div class="metric-lbl">Median</div></div><div class="metric"><div class="metric-val m-gray">104.9</div><div class="metric-lbl">Max</div></div></div>
+    </div>
+    <div class="progress-wrap"><div class="progress-labels"><span>Completed: 2,809 / 2,933</span><span>95.8%</span></div><div class="progress-bg"><div class="progress-fill" style="width:95.8%;background:linear-gradient(90deg,#3b82f6,#60a5fa)"></div></div></div>
+  </div>
+
+  <div class="stage-card">
+    <div class="stage-header">
+      <div class="stage-name-wrap"><span class="stage-name">Consent Form Signed — Attempted Contact</span><span class="still-badge">⏳ 28 waiting · avg 7.0d</span></div>
+      <div class="metrics-row"><div class="metric"><div class="metric-val m-blue">2.3</div><div class="metric-lbl">Avg days</div></div><div class="metric"><div class="metric-val m-gray">1.0</div><div class="metric-lbl">Median</div></div><div class="metric"><div class="metric-val m-gray">41.9</div><div class="metric-lbl">Max</div></div></div>
+    </div>
+    <div class="progress-wrap"><div class="progress-labels"><span>Completed: 2,521 / 2,551</span><span>98.8%</span></div><div class="progress-bg"><div class="progress-fill" style="width:98.8%;background:linear-gradient(90deg,#06b6d4,#22d3ee)"></div></div></div>
+  </div>
+
+  <div class="stage-card">
+    <div class="stage-header">
+      <div class="stage-name-wrap"><span class="stage-name">2. Medical Record Requested</span><span class="still-badge">⏳ 46 waiting · avg 18.1d</span></div>
+      <div class="metrics-row"><div class="metric"><div class="metric-val m-blue">4.4</div><div class="metric-lbl">Avg days</div></div><div class="metric"><div class="metric-val m-gray">2.0</div><div class="metric-lbl">Median</div></div><div class="metric"><div class="metric-val m-gray">50.0</div><div class="metric-lbl">Max</div></div></div>
+    </div>
+    <div class="progress-wrap"><div class="progress-labels"><span>Completed: 873 / 923</span><span>94.6%</span></div><div class="progress-bg"><div class="progress-fill" style="width:94.6%;background:linear-gradient(90deg,#f59e0b,#fbbf24)"></div></div></div>
+  </div>
+
+  <div class="stage-card">
+    <div class="stage-header">
+      <div class="stage-name-wrap"><span class="stage-name">3B. Medical Record Received</span><span class="still-badge">⏳ 16 waiting · avg 4.1d</span></div>
+      <div class="metrics-row"><div class="metric"><div class="metric-val m-orange">6.2</div><div class="metric-lbl">Avg days</div></div><div class="metric"><div class="metric-val m-gray">5.2</div><div class="metric-lbl">Median</div></div><div class="metric"><div class="metric-val m-gray">42.9</div><div class="metric-lbl">Max</div></div></div>
+    </div>
+    <div class="progress-wrap"><div class="progress-labels"><span>Completed: 623 / 639</span><span>97.5%</span></div><div class="progress-bg"><div class="progress-fill" style="width:97.5%;background:linear-gradient(90deg,#10b981,#34d399)"></div></div></div>
+  </div>
+
+  <div class="stage-card">
+    <div class="stage-header">
+      <div class="stage-name-wrap"><span class="stage-name">4. Under Abstraction</span></div>
+      <div class="metrics-row"><div class="metric"><div class="metric-val m-purple">0.1</div><div class="metric-lbl">Avg days</div></div><div class="metric"><div class="metric-val m-gray">0.0</div><div class="metric-lbl">Median</div></div><div class="metric"><div class="metric-val m-gray">10.3</div><div class="metric-lbl">Max</div></div></div>
+    </div>
+    <div class="progress-wrap"><div class="progress-labels"><span>Completed: 597 / 598</span><span>99.8%</span></div><div class="progress-bg"><div class="progress-fill" style="width:99.8%;background:linear-gradient(90deg,#8b5cf6,#a78bfa)"></div></div></div>
+  </div>
+
+  <div class="stage-card" style="border-color:#10b98133">
+    <div class="stage-header">
+      <div class="stage-name-wrap"><span class="stage-name">Report Release Date</span></div>
+      <div class="metrics-row"><div class="metric"><div class="metric-val m-green">16.5</div><div class="metric-lbl">Avg days</div></div><div class="metric"><div class="metric-val m-gray">13.5</div><div class="metric-lbl">Median</div></div><div class="metric"><div class="metric-val m-gray">526</div><div class="metric-lbl">Records</div></div></div>
+    </div>
+    <div class="progress-wrap"><div class="progress-labels"><span>Total time from Create Date to Report Release</span></div><div class="progress-bg"><div class="progress-fill" style="width:100%;background:linear-gradient(90deg,#10b981,#34d399)"></div></div></div>
+  </div>
+</div>
+
+<!-- COMPARISON -->
+<div id="panel-compare" class="hidden">
+  <div class="compare-section">
+    <div class="compare-title">Average Stage Duration — CTMS vs CTMS International (days, completed records)</div>
+    <div class="legend">
+      <span><span class="legend-dot" style="background:#3b82f6"></span>CTMS</span>
+      <span><span class="legend-dot" style="background:#f59e0b"></span>CTMS International</span>
+    </div>
+    <div class="compare-row" style="margin-bottom:6px">
+      <div class="compare-header">Stage</div><div class="compare-header">CTMS</div><div class="compare-header">CTMS International</div>
+    </div>
+    <div class="compare-row"><div class="compare-stage-name">1. Consent Forms Signed</div><div><div class="bar-c" style="width:72%;background:linear-gradient(90deg,#3b82f6,#60a5fa)">7.2d</div></div><div><div class="bar-c" style="width:9%;background:linear-gradient(90deg,#f59e0b,#fbbf24)">0.9d</div></div></div>
+    <div class="compare-row"><div class="compare-stage-name">Attempted Contact</div><div><div class="bar-c" style="width:40%;background:linear-gradient(90deg,#3b82f6,#60a5fa)">4.0d</div></div><div><div class="bar-c" style="width:23%;background:linear-gradient(90deg,#f59e0b,#fbbf24)">2.3d</div></div></div>
+    <div class="compare-row"><div class="compare-stage-name">2. MR Requested</div><div><div class="bar-c" style="width:93%;background:linear-gradient(90deg,#3b82f6,#60a5fa)">9.3d</div></div><div><div class="bar-c" style="width:44%;background:linear-gradient(90deg,#f59e0b,#fbbf24)">4.4d</div></div></div>
+    <div class="compare-row"><div class="compare-stage-name">3B. MR Received</div><div><div class="bar-c" style="width:87%;background:linear-gradient(90deg,#3b82f6,#60a5fa)">8.7d</div></div><div><div class="bar-c" style="width:62%;background:linear-gradient(90deg,#f59e0b,#fbbf24)">6.2d</div></div></div>
+    <div class="compare-row"><div class="compare-stage-name">4. Under Abstraction</div><div><div class="bar-c" style="width:2%;background:linear-gradient(90deg,#3b82f6,#60a5fa)">0.2d</div></div><div><div class="bar-c" style="width:1%;background:linear-gradient(90deg,#f59e0b,#fbbf24)">0.1d</div></div></div>
+    <div class="compare-row"><div class="compare-stage-name">🏁 Full Funnel (Create → Report)</div><div><div class="bar-c" style="width:100%;background:linear-gradient(90deg,#10b981,#34d399)">21.7d</div></div><div><div class="bar-c" style="width:76%;background:linear-gradient(90deg,#10b981,#34d399)">16.5d</div></div></div>
+  </div>
+  <div class="compare-section">
+    <div class="compare-title">Summary</div>
+    <div class="summary-grid">
+      <div class="summary-card">
+        <div class="summary-pip" style="color:#60a5fa">🔵 CTMS</div>
+        <div class="summary-row"><span>Total Records</span><b>8,111</b></div>
+        <div class="summary-row"><span>Reports Released</span><b>2,059</b></div>
+        <div class="summary-row"><span>Avg. Full Funnel</span><b>21.7 days</b></div>
+        <div class="summary-row"><span>Median Full Funnel</span><b>16.4 days</b></div>
+        <div class="summary-row"><span>Slowest Stage</span><b style="color:#f59e0b">MR Requested (9.3d)</b></div>
+        <div class="summary-row"><span>Biggest Bottleneck</span><b style="color:#f87171">657 records · 43.9d avg wait</b></div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-pip" style="color:#fbbf24">🟡 CTMS International</div>
+        <div class="summary-row"><span>Total Records</span><b>2,933</b></div>
+        <div class="summary-row"><span>Reports Released</span><b>526</b></div>
+        <div class="summary-row"><span>Avg. Full Funnel</span><b>16.5 days</b></div>
+        <div class="summary-row"><span>Median Full Funnel</span><b>13.5 days</b></div>
+        <div class="summary-row"><span>Slowest Stage</span><b style="color:#f59e0b">MR Received (6.2d)</b></div>
+        <div class="summary-row"><span>Biggest Bottleneck</span><b style="color:#f87171">123 records · 63.4d avg wait</b></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CANCER TYPE -->
+<div id="panel-cancer" class="hidden">
+  <div style="margin-bottom:18px">
+    <div class="section-title" style="margin-bottom:8px">Pipeline</div>
+    <div class="pip-toggle">
+      <button class="pip-pill active" id="pip-btn-ctms" onclick="switchPip('CTMS')">CTMS</button>
+      <button class="pip-pill inactive" id="pip-btn-intl" onclick="switchPip('CTMS International')">CTMS International</button>
+    </div>
+    <div class="section-title" style="margin-bottom:8px">Cancer Type</div>
+    <div class="cancer-controls" id="cancer-pills">
+      <button class="pill active"   onclick="switchCancer('Lung',this)">🫁 Lung</button>
+      <button class="pill inactive" onclick="switchCancer('MM',this)">🩸 Multiple Myeloma</button>
+      <button class="pill inactive" onclick="switchCancer('Breast',this)">🎗️ Breast</button>
+      <button class="pill inactive" onclick="switchCancer('Other',this)">📋 Other</button>
+    </div>
+  </div>
+  <div id="cancer-content"></div>
+</div>
+
+<script>
+const CDATA = {
+  "CTMS": {
+    "Lung":   {"total":1553,"funnel_n":305,"funnel_avg":20.3,"funnel_med":15.4,"stages":{"1. Consent Forms Signed":{"avg":7.5,"med":2.5,"n_entered":1553,"n_completed":1345,"n_still":208,"avg_still":31.5},"Attempted Contact":{"avg":2.8,"med":0.4,"n_entered":5,"n_completed":3,"n_still":2,"avg_still":68.2},"2. MR Requested":{"avg":9.9,"med":7.6,"n_entered":830,"n_completed":734,"n_still":96,"avg_still":46.0},"3B. MR Received":{"avg":5.9,"med":2.2,"n_entered":469,"n_completed":468,"n_still":1,"avg_still":0.9},"4. Under Abstraction":{"avg":0.2,"med":0.0,"n_entered":389,"n_completed":387,"n_still":2,"avg_still":16.4}}},
+    "MM":     {"total":826,"funnel_n":260,"funnel_avg":17.5,"funnel_med":15.4,"stages":{"1. Consent Forms Signed":{"avg":6.5,"med":1.7,"n_entered":826,"n_completed":744,"n_still":82,"avg_still":33.9},"Attempted Contact":{"avg":null,"med":null,"n_entered":0,"n_completed":0,"n_still":0,"avg_still":null},"2. MR Requested":{"avg":9.0,"med":7.0,"n_entered":550,"n_completed":495,"n_still":55,"avg_still":50.9},"3B. MR Received":{"avg":4.4,"med":2.4,"n_entered":354,"n_completed":331,"n_still":23,"avg_still":3.4},"4. Under Abstraction":{"avg":0.1,"med":0.0,"n_entered":249,"n_completed":249,"n_still":0,"avg_still":null}}},
+    "Breast": {"total":1263,"funnel_n":412,"funnel_avg":18.7,"funnel_med":13.8,"stages":{"1. Consent Forms Signed":{"avg":5.7,"med":1.8,"n_entered":1263,"n_completed":1129,"n_still":134,"avg_still":33.9},"Attempted Contact":{"avg":7.1,"med":7.1,"n_entered":2,"n_completed":2,"n_still":0,"avg_still":null},"2. MR Requested":{"avg":9.5,"med":7.2,"n_entered":855,"n_completed":765,"n_still":90,"avg_still":42.1},"3B. MR Received":{"avg":5.2,"med":1.4,"n_entered":579,"n_completed":573,"n_still":6,"avg_still":1.3},"4. Under Abstraction":{"avg":0.1,"med":0.0,"n_entered":426,"n_completed":424,"n_still":2,"avg_still":2.6}}},
+    "Other":  {"total":4469,"funnel_n":1082,"funnel_avg":24.2,"funnel_med":18.6,"stages":{"1. Consent Forms Signed":{"avg":7.6,"med":1.7,"n_entered":4469,"n_completed":3931,"n_still":538,"avg_still":35.3},"Attempted Contact":{"avg":3.3,"med":1.8,"n_entered":5,"n_completed":3,"n_still":2,"avg_still":23.1},"2. MR Requested":{"avg":9.1,"med":7.0,"n_entered":2817,"n_completed":2401,"n_still":416,"avg_still":42.8},"3B. MR Received":{"avg":11.5,"med":5.5,"n_entered":1793,"n_completed":1656,"n_still":137,"avg_still":8.7},"4. Under Abstraction":{"avg":0.2,"med":0.0,"n_entered":1325,"n_completed":1323,"n_still":2,"avg_still":15.1}}}
+  },
+  "CTMS International": {
+    "Lung":   {"total":653,"funnel_n":107,"funnel_avg":13.2,"funnel_med":7.9,"stages":{"1. Consent Forms Signed":{"avg":0.7,"med":0.3,"n_entered":653,"n_completed":601,"n_still":52,"avg_still":56.5},"Attempted Contact":{"avg":2.9,"med":1.3,"n_entered":558,"n_completed":549,"n_still":9,"avg_still":3.7},"2. MR Requested":{"avg":4.6,"med":2.0,"n_entered":170,"n_completed":160,"n_still":10,"avg_still":17.4},"3B. MR Received":{"avg":1.8,"med":1.0,"n_entered":114,"n_completed":113,"n_still":1,"avg_still":0.9},"4. Under Abstraction":{"avg":0.1,"med":0.0,"n_entered":111,"n_completed":111,"n_still":0,"avg_still":null}}},
+    "MM":     {"total":141,"funnel_n":8,"funnel_avg":18.4,"funnel_med":14.1,"stages":{"1. Consent Forms Signed":{"avg":0.9,"med":0.2,"n_entered":141,"n_completed":141,"n_still":0,"avg_still":null},"Attempted Contact":{"avg":1.9,"med":0.1,"n_entered":132,"n_completed":132,"n_still":0,"avg_still":null},"2. MR Requested":{"avg":4.1,"med":3.0,"n_entered":20,"n_completed":18,"n_still":2,"avg_still":23.1},"3B. MR Received":{"avg":2.7,"med":0.8,"n_entered":13,"n_completed":13,"n_still":0,"avg_still":null},"4. Under Abstraction":{"avg":0.0,"med":0.0,"n_entered":13,"n_completed":13,"n_still":0,"avg_still":null}}},
+    "Breast": {"total":448,"funnel_n":58,"funnel_avg":11.4,"funnel_med":5.5,"stages":{"1. Consent Forms Signed":{"avg":0.6,"med":0.3,"n_entered":448,"n_completed":433,"n_still":15,"avg_still":65.5},"Attempted Contact":{"avg":2.0,"med":0.4,"n_entered":405,"n_completed":400,"n_still":5,"avg_still":4.8},"2. MR Requested":{"avg":5.6,"med":2.5,"n_entered":139,"n_completed":131,"n_still":8,"avg_still":31.5},"3B. MR Received":{"avg":1.5,"med":0.9,"n_entered":92,"n_completed":91,"n_still":1,"avg_still":3.4},"4. Under Abstraction":{"avg":0.0,"med":0.0,"n_entered":88,"n_completed":88,"n_still":0,"avg_still":null}}},
+    "Other":  {"total":1679,"funnel_n":352,"funnel_avg":18.3,"funnel_med":14.8,"stages":{"1. Consent Forms Signed":{"avg":1.0,"med":0.2,"n_entered":1679,"n_completed":1624,"n_still":55,"avg_still":69.5},"Attempted Contact":{"avg":2.2,"med":1.0,"n_entered":1451,"n_completed":1438,"n_still":13,"avg_still":8.2},"2. MR Requested":{"avg":4.1,"med":1.9,"n_entered":592,"n_completed":566,"n_still":26,"avg_still":13.9},"3B. MR Received":{"avg":8.5,"med":8.0,"n_entered":418,"n_completed":404,"n_still":14,"avg_still":4.3},"4. Under Abstraction":{"avg":0.1,"med":0.0,"n_entered":384,"n_completed":384,"n_still":0,"avg_still":null}}}
+  }
+};
+
+const STAGE_ORDER = ['1. Consent Forms Signed','Attempted Contact','2. MR Requested','3B. MR Received','4. Under Abstraction'];
+const STAGE_COLORS = {'1. Consent Forms Signed':'#3b82f6','Attempted Contact':'#06b6d4','2. MR Requested':'#f59e0b','3B. MR Received':'#10b981','4. Under Abstraction':'#8b5cf6'};
+const CANCER_LABELS = {'Lung':'🫁 Lung','MM':'🩸 Multiple Myeloma','Breast':'🎗️ Breast','Other':'📋 Other'};
+const CANCER_COLORS = {'Lung':'#3b82f6','MM':'#8b5cf6','Breast':'#ec4899','Other':'#64748b'};
+
+let currentPip = 'CTMS';
+let currentCancer = 'Lung';
+
+function fmt(v){ return v===null?'—':v+'d'; }
+
+function renderCancerContent(){
+  const d = CDATA[currentPip][currentCancer];
+  const label = CANCER_LABELS[currentCancer];
+  const maxStage = Math.max(...STAGE_ORDER.map(s=>d.stages[s]?.avg||0),1);
+
+  let stageRows='';
+  STAGE_ORDER.forEach(sn=>{
+    const s=d.stages[sn];
+    if(!s||s.n_entered===0) return;
+    const col=STAGE_COLORS[sn];
+    const bw=s.avg?Math.max(3,Math.round(s.avg/maxStage*100)):0;
+    const slow=s.avg!==null&&s.avg>8;
+    const sName=sn.replace(/^\d+B?\. /,'');
+    const stillChip=s.n_still>0?`<span class="still-mini">⏳ ${s.n_still} waiting${s.avg_still?' · '+s.avg_still+'d':''}</span>`:'';
+    stageRows+=`<div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+        <div style="font-size:12px;color:#94a3b8;font-weight:500">${sName} ${stillChip}</div>
+        <div style="font-size:13px;font-weight:700;color:${slow?'#f87171':'#e2e8f0'}">${fmt(s.avg)}<span style="font-weight:400;color:#475569;font-size:11px"> / med ${fmt(s.med)}</span></div>
+      </div>
+      <div style="background:#0f172a;border-radius:4px;height:6px;overflow:hidden"><div style="height:100%;width:${bw}%;background:${col};border-radius:4px"></div></div>
+      <div style="font-size:10px;color:#334155;margin-top:3px">${s.n_completed} completed of ${s.n_entered} entered</div>
+    </div>`;
+  });
+
+  const allCancers=['Lung','MM','Breast','Other'];
+  const maxF=Math.max(...allCancers.map(c=>CDATA[currentPip][c].funnel_avg||0),1);
+  const compBars=allCancers.map(cg=>{
+    const cd=CDATA[currentPip][cg];
+    const isActive=cg===currentCancer;
+    const w=cd.funnel_avg?Math.max(3,Math.round(cd.funnel_avg/maxF*100)):0;
+    const col=CANCER_COLORS[cg];
+    return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;opacity:${isActive?1:0.5}">
+      <div style="width:140px;font-size:12px;font-weight:${isActive?700:400};color:${isActive?col:'#64748b'}">${CANCER_LABELS[cg]}</div>
+      <div style="flex:1;background:#0f172a;border-radius:4px;height:20px;overflow:hidden">
+        ${cd.funnel_avg?`<div style="height:100%;width:${w}%;background:${col};border-radius:4px;display:flex;align-items:center;padding-left:8px;font-size:11px;font-weight:700;color:#fff">${cd.funnel_avg}d</div>`:'<div style="padding-left:8px;line-height:20px;font-size:11px;color:#334155">No data</div>'}
+      </div>
+      <div style="font-size:11px;color:#475569;width:110px;text-align:right">med ${cd.funnel_med||'—'}d &nbsp;·&nbsp; n=${cd.funnel_n}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('cancer-content').innerHTML=`
+    <div class="cancer-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;flex-wrap:wrap;gap:12px">
+        <div>
+          <div style="font-size:16px;font-weight:700;color:#e2e8f0;margin-bottom:3px">${label} — ${currentPip}</div>
+          <div style="font-size:12px;color:#64748b">${d.total.toLocaleString()} total records &nbsp;·&nbsp; ${d.funnel_n} reports released</div>
+        </div>
+        <div style="background:#0f172a;border-radius:10px;padding:14px 18px;text-align:right">
+          <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Avg. Full Funnel</div>
+          <div style="font-size:32px;font-weight:800;color:#60a5fa;line-height:1">${d.funnel_avg!==null?d.funnel_avg+'d':'—'}</div>
+          <div style="font-size:11px;color:#475569;margin-top:3px">Median: ${fmt(d.funnel_med)} &nbsp;·&nbsp; Create → Report</div>
+        </div>
+      </div>
+      <div style="border-top:1px solid #2d3748;padding-top:16px">
+        <div style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:14px">Stage Durations (completed records)</div>
+        ${stageRows||'<div class="no-data">Insufficient data</div>'}
+      </div>
+    </div>
+    <div style="background:#1e293b;border-radius:12px;padding:18px;border:1px solid #2d3748">
+      <div style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:14px">All Cancer Types — Full Funnel Comparison (${currentPip})</div>
+      ${compBars}
+    </div>`;
+}
+
+function switchPip(pip){
+  currentPip=pip;
+  document.getElementById('pip-btn-ctms').className='pip-pill '+(pip==='CTMS'?'active':'inactive');
+  document.getElementById('pip-btn-intl').className='pip-pill intl '+(pip==='CTMS International'?'active':'inactive');
+  renderCancerContent();
+}
+
+function switchCancer(cg,el){
+  currentCancer=cg;
+  document.querySelectorAll('#cancer-pills .pill').forEach(p=>p.className='pill inactive');
+  el.className='pill active';
+  renderCancerContent();
+}
+
+function show(p){
+  ['ctms','intl','compare','cancer'].forEach(id=>document.getElementById('panel-'+id).classList.add('hidden'));
+  document.getElementById('panel-'+p).classList.remove('hidden');
+  document.querySelectorAll('.tab').forEach(t=>t.className='tab inactive');
+  const map={ctms:0,intl:1,compare:2,cancer:3};
+  document.querySelectorAll('.tab')[map[p]].className='tab active';
+  if(p==='cancer') renderCancerContent();
+}
+</script>
+</body>
+</html>
